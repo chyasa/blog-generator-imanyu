@@ -1,5 +1,5 @@
 import React, { useState, useCallback } from 'react';
-import { FileText, Plus, Trash2, GripVertical, ArrowDown, ArrowUp, Info, ChevronRight, ChevronDown } from 'lucide-react';
+import { FileText, Plus, Trash2, GripVertical, ArrowDown, ArrowUp, Info, ChevronRight, ChevronDown, Loader2 } from 'lucide-react';
 import { OutlineItem } from '../types';
 import {
   DndContext,
@@ -29,6 +29,7 @@ interface OutlineEditorProps {
   onOutlineChange: (outline: OutlineItem[]) => void;
   onApprove: () => void;
   onRegenerate: () => void;
+  isLoading?: boolean;
 }
 
 interface SortableItemProps {
@@ -161,7 +162,13 @@ const SortableItem = ({
 // ドロップ位置の種類
 type DropPosition = 'before' | 'after' | 'child' | null;
 
-export function OutlineEditor({ outline, onOutlineChange, onApprove, onRegenerate }: OutlineEditorProps) {
+export function OutlineEditor({ 
+  outline, 
+  onOutlineChange, 
+  onApprove, 
+  onRegenerate,
+  isLoading = false 
+}: OutlineEditorProps) {
   const [showTips, setShowTips] = useState(true);
   const [activeId, setActiveId] = useState<UniqueIdentifier | null>(null);
   const [overItemId, setOverItemId] = useState<UniqueIdentifier | null>(null);
@@ -547,99 +554,102 @@ export function OutlineEditor({ outline, onOutlineChange, onApprove, onRegenerat
   };
 
   return (
-    <div className="w-full max-w-4xl mx-auto">
+    <div className="w-full max-w-3xl mx-auto p-6">
       <div className="bg-white rounded-lg shadow-lg p-6">
-        <div className="flex items-center justify-between mb-6">
-          <div className="flex items-center gap-2">
-            <FileText className="w-6 h-6 text-blue-600" />
-            <h2 className="text-2xl font-bold text-gray-800">記事の目次</h2>
-          </div>
-          <div className="flex items-center gap-2">
-            <button
-              onClick={onRegenerate}
-              className="px-4 py-2 text-blue-600 hover:text-blue-800 font-medium transition-colors"
-            >
-              目次を再生成
-            </button>
-            <button
-              onClick={onApprove}
-              className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors"
-            >
-              この目次で本文を生成
-            </button>
-          </div>
+        <div className="flex items-center gap-2 mb-4">
+          <FileText className="w-6 h-6 text-blue-600" />
+          <h2 className="text-2xl font-bold text-gray-800">アウトライン作成</h2>
         </div>
 
-        {showTips && (
-          <div className="mb-6 bg-blue-50 border border-blue-200 rounded-lg p-4">
-            <div className="flex items-start gap-3">
-              <Info className="w-5 h-5 text-blue-600 flex-shrink-0 mt-0.5" />
-              <div className="flex-1">
-                <h3 className="font-semibold text-blue-900 mb-2">使い方のヒント</h3>
-                <ul className="text-sm text-blue-800 space-y-1">
-                  <li>• ドラッグ＆ドロップで項目を並び替えできます</li>
-                  <li>• 上部にドロップすると前に、下部だと後ろに配置されます</li>
-                  <li>• 中央にドロップすると子項目として配置されます</li>
-                  <li>• 項目の左側の矢印で子項目を折りたたみ/展開できます</li>
-                  <li>• 項目を削除すると、その配下の項目も削除されます</li>
-                </ul>
-              </div>
-              <button
-                onClick={() => setShowTips(false)}
-                className="text-blue-600 hover:text-blue-800 text-sm"
-              >
-                閉じる
-              </button>
+        <div className="mb-4 bg-blue-50 p-4 rounded-lg">
+          <div className="flex items-start gap-2">
+            <Info className="w-5 h-5 text-blue-600 mt-0.5" />
+            <div className="text-sm text-blue-800">
+              <p className="font-medium mb-1">ヒント</p>
+              <ul className="list-disc list-inside space-y-1">
+                <li>ドラッグ&ドロップでセクションの順序を入れ替えられます</li>
+                <li>「+」ボタンで新しいセクションを追加できます</li>
+                <li>上下の矢印でセクションのレベルを変更できます</li>
+                <li>子アイテムを持つセクションは▶をクリックして折りたたみ可能です</li>
+              </ul>
             </div>
           </div>
-        )}
-
-        <div className="space-y-2 mb-6">
-          <DndContext
-            sensors={sensors}
-            collisionDetection={pointerWithin}
-            onDragStart={handleDragStart}
-            onDragOver={handleDragOver}
-            onDragEnd={handleDragEnd}
-          >
-            <SortableContext items={visibleItems.map(item => item.id)} strategy={verticalListSortingStrategy}>
-              {visibleItems.map((item) => (
-                <SortableItem
-                  key={item.id}
-                  item={item}
-                  items={outline}
-                  onUpdateTitle={updateItemTitle}
-                  onMove={moveItem}
-                  onAdd={addItem}
-                  onRemove={removeItem}
-                  isOver={overItemId === item.id}
-                  dropPosition={overItemId === item.id ? dropPosition : null}
-                  hasChildren={hasChildren(item.id)}
-                  isCollapsed={isCollapsed(item.id)}
-                  onToggleCollapse={toggleCollapse}
-                />
-              ))}
-            </SortableContext>
-            <DragOverlay>
-              {activeId ? (
-                <div className="bg-white shadow-xl rounded-lg p-2 border-2 border-blue-500">
-                  <div className="flex items-center gap-2">
-                    <GripVertical className="w-5 h-5 text-blue-600" />
-                    <div className="font-medium text-gray-800">{getActiveItem()?.title}</div>
-                  </div>
-                </div>
-              ) : null}
-            </DragOverlay>
-          </DndContext>
         </div>
 
-        <button
-          onClick={() => addItem(null)}
-          className="flex items-center gap-2 px-4 py-2 text-blue-600 hover:bg-blue-50 rounded-md transition-colors w-full justify-center border-2 border-dashed border-blue-200 hover:border-blue-400"
-        >
-          <Plus className="w-5 h-5" />
-          <span>新しいセクションを追加</span>
-        </button>
+        {isLoading ? (
+          <div className="py-12 flex flex-col items-center justify-center">
+            <Loader2 className="w-10 h-10 text-blue-600 animate-spin mb-3" />
+            <p className="text-gray-600 text-lg">アウトラインを生成しています...</p>
+          </div>
+        ) : (
+          <>
+            <div className="border border-gray-200 rounded-lg mb-4">
+              <DndContext
+                sensors={sensors}
+                collisionDetection={pointerWithin}
+                onDragStart={handleDragStart}
+                onDragOver={handleDragOver}
+                onDragEnd={handleDragEnd}
+              >
+                <SortableContext items={visibleItems.map(item => item.id)} strategy={verticalListSortingStrategy}>
+                  {visibleItems.map((item) => (
+                    <SortableItem
+                      key={item.id}
+                      item={item}
+                      items={outline}
+                      onUpdateTitle={updateItemTitle}
+                      onMove={moveItem}
+                      onAdd={addItem}
+                      onRemove={removeItem}
+                      isOver={overItemId === item.id}
+                      dropPosition={overItemId === item.id ? dropPosition : null}
+                      hasChildren={hasChildren(item.id)}
+                      isCollapsed={isCollapsed(item.id)}
+                      onToggleCollapse={toggleCollapse}
+                    />
+                  ))}
+                </SortableContext>
+                <DragOverlay>
+                  {activeId ? (
+                    <div className="bg-white shadow-xl rounded-lg p-2 border-2 border-blue-500">
+                      <div className="flex items-center gap-2">
+                        <GripVertical className="w-5 h-5 text-blue-600" />
+                        <div className="font-medium text-gray-800">{getActiveItem()?.title}</div>
+                      </div>
+                    </div>
+                  ) : null}
+                </DragOverlay>
+              </DndContext>
+            </div>
+
+            <button
+              onClick={() => addItem(null)}
+              className="flex items-center gap-2 px-4 py-2 text-blue-600 hover:bg-blue-50 rounded-md transition-colors w-full justify-center border-2 border-dashed border-blue-200 hover:border-blue-400"
+              disabled={isLoading}
+            >
+              <Plus className="w-5 h-5" />
+              <span>新しいセクションを追加</span>
+            </button>
+          </>
+        )}
+
+        <div className="mt-6 flex justify-between">
+          <button
+            onClick={onRegenerate}
+            className="text-blue-600 hover:text-blue-800 font-medium disabled:text-gray-400 disabled:cursor-not-allowed"
+            disabled={isLoading}
+          >
+            アウトラインを再生成
+          </button>
+          
+          <button
+            onClick={onApprove}
+            className="bg-blue-600 text-white px-6 py-2 rounded-md hover:bg-blue-700 disabled:bg-gray-400 disabled:cursor-not-allowed"
+            disabled={outline.length === 0 || isLoading}
+          >
+            このアウトラインで続ける
+          </button>
+        </div>
       </div>
     </div>
   );

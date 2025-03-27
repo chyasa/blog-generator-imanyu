@@ -22,3 +22,7 @@ dist-ssr
 *.njsproj
 *.sln
 *.sw?
+
+# APIテスト関連ファイル
+src/api-tests/results/
+.env

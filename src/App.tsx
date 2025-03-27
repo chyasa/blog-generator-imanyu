@@ -5,9 +5,10 @@ import { OutlineEditor } from './components/OutlineEditor';
 import { ContentEditor } from './components/ContentEditor';
 import { GenerationStep, OutlineItem } from './types';
 import { PencilLine, ListChecks, FileText, FileEdit } from 'lucide-react';
+import { generateTitles, generateOutline, generateContent } from './services/api';
 
 // ダミーデータは変更なし...
-const DUMMY_TITLES = {
+const DUMMY_TITLES: Record<string, string[]> = {
   'プログラミング': [
     '初心者でもわかる！React入門ガイド2024',
     'ゼロからはじめるReact開発 - 基礎から実践まで',
@@ -28,7 +29,7 @@ const DUMMY_TITLES = {
   ],
 };
 
-const DUMMY_OUTLINES = {
+const DUMMY_OUTLINES: Record<string, OutlineItem[]> = {
   'プログラミング': [
     { id: '1', title: 'はじめに', level: 1 },
     { id: '2', title: 'Reactの基礎知識', level: 1 },
@@ -69,6 +70,8 @@ function App() {
   const [selectedTitle, setSelectedTitle] = useState<string | null>(null);
   const [outline, setOutline] = useState<OutlineItem[]>([]);
   const [content, setContent] = useState('');
+  const [isLoading, setIsLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   const handleStepClick = (stepId: GenerationStep) => {
     const currentStepIndex = STEPS.findIndex(s => s.id === currentStep);
@@ -80,36 +83,126 @@ function App() {
     }
   };
 
-  // その他のハンドラー関数は変更なし...
-  const handleThemeSubmit = (theme: string) => {
+  const handleThemeSubmit = async (theme: string) => {
     setTheme(theme);
-    const category = Object.keys(DUMMY_TITLES).find(key => 
-      theme.toLowerCase().includes(key.toLowerCase())
-    ) || 'プログラミング';
-    setTitles(DUMMY_TITLES[category]);
-    setCurrentStep('titles');
+    setIsLoading(true);
+    setError(null);
+    
+    try {
+      // APIを使用してタイトル候補を生成
+      const generatedTitles = await generateTitles(theme);
+      
+      if (generatedTitles.length === 0) {
+        throw new Error('タイトル候補を生成できませんでした。別のテーマを試してください。');
+      }
+      
+      setTitles(generatedTitles);
+      setCurrentStep('titles');
+    } catch (err) {
+      console.error('タイトル生成エラー:', err);
+      setError('タイトル候補の生成中にエラーが発生しました。別のテーマを試すか、後でもう一度お試しください。');
+      
+      // APIエラー時はダミーデータを使用
+      const category = Object.keys(DUMMY_TITLES).find(key => 
+        theme.toLowerCase().includes(key.toLowerCase())
+      ) || 'プログラミング';
+      setTitles(DUMMY_TITLES[category]);
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   const handleTitleSelect = (title: string) => {
+    // タイトルを選択するだけで、画面遷移はしない
     setSelectedTitle(title);
-    const category = Object.keys(DUMMY_OUTLINES).find(key => 
-      theme.toLowerCase().includes(key.toLowerCase())
-    ) || 'プログラミング';
-    setOutline(DUMMY_OUTLINES[category]);
-    setCurrentStep('outline');
   };
 
-  const handleRegenerateTitles = () => {
-    setTitles([...titles].sort(() => Math.random() - 0.5));
+  // 新しい関数：アウトライン作成ボタンがクリックされたときに呼ばれる
+  const handleProceedToOutline = async () => {
+    // selectedTitleがnullの場合は何もしない（ボタンはdisabledなので通常は起きない）
+    if (!selectedTitle) return;
+    
+    setIsLoading(true);
+    setError(null);
+    
+    try {
+      // アウトライン画面に遷移
+      setCurrentStep('outline');
+      
+      // APIを使用してアウトライン候補を生成
+      const generatedOutline = await generateOutline(theme, selectedTitle);
+      
+      if (generatedOutline.length === 0) {
+        throw new Error('アウトライン候補を生成できませんでした。別のタイトルを試してください。');
+      }
+      
+      setOutline(generatedOutline);
+    } catch (err) {
+      console.error('アウトライン生成エラー:', err);
+      setError('アウトライン候補の生成中にエラーが発生しました。別のタイトルを試すか、後でもう一度お試しください。');
+      
+      // APIエラー時はダミーデータを使用
+      const category = Object.keys(DUMMY_OUTLINES).find(key => 
+        theme.toLowerCase().includes(key.toLowerCase())
+      ) || 'プログラミング';
+      setOutline(DUMMY_OUTLINES[category]);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleRegenerateTitles = async () => {
+    setIsLoading(true);
+    setError(null);
+    
+    try {
+      // APIを使用してタイトル候補を再生成
+      const generatedTitles = await generateTitles(theme);
+      
+      if (generatedTitles.length === 0) {
+        throw new Error('タイトル候補を生成できませんでした。別のテーマを試してください。');
+      }
+      
+      setTitles(generatedTitles);
+    } catch (err) {
+      console.error('タイトル再生成エラー:', err);
+      setError('タイトル候補の再生成中にエラーが発生しました。後でもう一度お試しください。');
+      
+      // エラー時は既存のタイトルをシャッフル
+      setTitles([...titles].sort(() => Math.random() - 0.5));
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   const handleOutlineChange = (newOutline: OutlineItem[]) => {
     setOutline(newOutline);
   };
 
-  const handleOutlineApprove = () => {
+  const handleOutlineApprove = async () => {
     setCurrentStep('content');
-    setContent(`# ${selectedTitle}
+    setIsLoading(true);
+    setError(null);
+    
+    try {
+      // APIを使用して本文を生成
+      if (!selectedTitle) {
+        throw new Error('タイトルが選択されていません。');
+      }
+      
+      const generatedContent = await generateContent(theme, selectedTitle, outline);
+      
+      if (!generatedContent) {
+        throw new Error('本文を生成できませんでした。');
+      }
+      
+      setContent(generatedContent);
+    } catch (err) {
+      console.error('本文生成エラー:', err);
+      setError('本文の生成中にエラーが発生しました。後でもう一度お試しください。');
+      
+      // エラー時はダミーコンテンツを生成
+      setContent(`# ${selectedTitle}
 
 ## はじめに
 ${theme}に関する記事です。
@@ -123,18 +216,69 @@ ${outline.map(item =>
 ## まとめ
 以上が${theme}についての基本的な解説でした。
 この記事を参考に、実践してみてください。`);
+    } finally {
+      setIsLoading(false);
+    }
   };
 
-  const handleRegenerateOutline = () => {
-    setOutline([...outline].sort(() => Math.random() - 0.5));
+  const handleRegenerateOutline = async () => {
+    setIsLoading(true);
+    setError(null);
+    
+    try {
+      // APIを使用してアウトライン候補を再生成
+      if (!selectedTitle) {
+        throw new Error('タイトルが選択されていません。');
+      }
+      
+      const generatedOutline = await generateOutline(theme, selectedTitle);
+      
+      if (generatedOutline.length === 0) {
+        throw new Error('アウトラインを生成できませんでした。別のタイトルを試してください。');
+      }
+      
+      setOutline(generatedOutline);
+    } catch (err) {
+      console.error('アウトライン再生成エラー:', err);
+      setError('アウトラインの再生成中にエラーが発生しました。後でもう一度お試しください。');
+      
+      // エラー時は既存のアウトラインをシャッフル
+      setOutline([...outline].sort(() => Math.random() - 0.5));
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   const handleContentChange = (newContent: string) => {
     setContent(newContent);
   };
 
-  const handleRegenerateContent = () => {
-    handleOutlineApprove();
+  const handleRegenerateContent = async () => {
+    setIsLoading(true);
+    setError(null);
+    
+    try {
+      // APIを使用して本文を再生成
+      if (!selectedTitle) {
+        throw new Error('タイトルが選択されていません。');
+      }
+      
+      const generatedContent = await generateContent(theme, selectedTitle, outline);
+      
+      if (!generatedContent) {
+        throw new Error('本文を生成できませんでした。');
+      }
+      
+      setContent(generatedContent);
+    } catch (err) {
+      console.error('本文再生成エラー:', err);
+      setError('本文の再生成中にエラーが発生しました。後でもう一度お試しください。');
+      
+      // エラー時はダミーコンテンツを生成
+      handleOutlineApprove();
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   const handleSaveContent = () => {
@@ -204,8 +348,14 @@ ${outline.map(item =>
 
       <div className="flex-1 pt-36">
         <main className="max-w-7xl mx-auto p-6 bg-gray-50">
+          {error && (
+            <div className="w-full max-w-2xl mx-auto mb-4 p-4 bg-red-50 border border-red-300 rounded-md text-red-700">
+              {error}
+            </div>
+          )}
+          
           {currentStep === 'theme' && (
-            <ThemeInput onSubmit={handleThemeSubmit} />
+            <ThemeInput onSubmit={handleThemeSubmit} isLoading={isLoading} />
           )}
           
           {currentStep === 'titles' && (
@@ -214,6 +364,8 @@ ${outline.map(item =>
               selectedTitle={selectedTitle}
               onSelect={handleTitleSelect}
               onRegenerate={handleRegenerateTitles}
+              onProceed={handleProceedToOutline}
+              isLoading={isLoading}
             />
           )}
 
@@ -223,6 +375,7 @@ ${outline.map(item =>
               onOutlineChange={handleOutlineChange}
               onApprove={handleOutlineApprove}
               onRegenerate={handleRegenerateOutline}
+              isLoading={isLoading}
             />
           )}
 
@@ -232,6 +385,7 @@ ${outline.map(item =>
               onContentChange={handleContentChange}
               onRegenerate={handleRegenerateContent}
               onSave={handleSaveContent}
+              isLoading={isLoading}
             />
           )}
         </main>
